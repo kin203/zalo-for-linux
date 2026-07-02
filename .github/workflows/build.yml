@@ -28,18 +28,18 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         submodules: recursive
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '22'
         cache: 'npm'
         
     - name: Cache Electron binaries
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       with:
         path: ~/.cache/electron
         key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
@@ -112,7 +112,7 @@ jobs:
         
     - name: Upload Original AppImage artifact
       if: steps.build.outputs.build == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ steps.build.outputs.original_appimage_name }}
         path: |
@@ -122,7 +122,7 @@ jobs:
         
     - name: Upload ZaDark AppImage artifact
       if: steps.build.outputs.build == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ steps.build.outputs.zadark_appimage_name }}
         path: |
@@ -132,7 +132,7 @@ jobs:
         
     - name: Create Release
       if: steps.build.outputs.build == 'true'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
       with:
         tag_name: ${{ steps.build.outputs.zalo_version }}
         name: ${{ steps.build.outputs.zalo_version }}
