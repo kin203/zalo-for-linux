@@ -48,6 +48,10 @@ We strongly recommend using **Gear Lever** to integrate the AppImage perfectly i
 
 **Note:** Zalo for Linux comes with a built-in updater. Whenever a new release is available, you will be prompted within the Zalo app to download and apply the update seamlessly without leaving the application.
 
+Release AppImages also include AppImageUpdate metadata and matching `.zsync`
+files, allowing compatible managers such as Gear Lever to download delta
+updates instead of the entire AppImage.
+
 1.  Download the latest `.AppImage` file from the [**Releases**](https://github.com/doandat943/zalo-for-linux/releases) page.
 2.  Install **Gear Lever** from [Flathub](https://flathub.org/en/apps/it.mijorus.gearlever).
 3.  Open **Gear Lever**.

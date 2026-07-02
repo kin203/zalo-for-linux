@@ -62,13 +62,62 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: npm run main
+
+    - name: Add AppImageUpdate metadata
+      if: steps.build.outputs.build == 'true'
+      env:
+        ORIGINAL_APPIMAGE: ${{ steps.build.outputs.original_appimage_file }}
+        ZADARK_APPIMAGE: ${{ steps.build.outputs.zadark_appimage_file }}
+        ORIGINAL_ZSYNC: dist/Zalo-Original.AppImage.zsync
+        ZADARK_ZSYNC: dist/Zalo-ZaDark.AppImage.zsync
+      run: |
+        set -euo pipefail
+
+        curl --fail --location --retry 3 \
+          --output appimagetool.AppImage \
+          https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+        chmod +x appimagetool.AppImage
+
+        owner="${GITHUB_REPOSITORY%%/*}"
+        repository="${GITHUB_REPOSITORY#*/}"
+
+        make_updateable() {
+          local appimage="$1"
+          local filename
+          local zsync_asset="$2"
+          local workdir
+
+          filename="$(basename "$appimage")"
+          workdir="$(mktemp -d)"
+
+          (
+            cd "$workdir"
+            "${GITHUB_WORKSPACE}/${appimage}" --appimage-extract >/dev/null
+            ARCH=x86_64 "${GITHUB_WORKSPACE}/appimagetool.AppImage" \
+              --appimage-extract-and-run \
+              -u "gh-releases-zsync|${owner}|${repository}|latest|$(basename "$zsync_asset")" \
+              squashfs-root "${filename}"
+          )
+
+          mv "${workdir}/${filename}" "$appimage"
+          mv "${workdir}/${filename}.zsync" "$zsync_asset"
+          rm -rf "$workdir"
+        }
+
+        make_updateable "$ORIGINAL_APPIMAGE" "$ORIGINAL_ZSYNC"
+        make_updateable "$ZADARK_APPIMAGE" "$ZADARK_ZSYNC"
+
+        test -s "$ORIGINAL_ZSYNC"
+        test -s "$ZADARK_ZSYNC"
         
     - name: Upload Original AppImage artifact
       if: steps.build.outputs.build == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.build.outputs.original_appimage_name }}
-        path: ${{ steps.build.outputs.original_appimage_file }}
+        path: |
+          ${{ steps.build.outputs.original_appimage_file }}
+          dist/Zalo-Original.AppImage.zsync
         retention-days: 30
         
     - name: Upload ZaDark AppImage artifact
@@ -76,7 +125,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.build.outputs.zadark_appimage_name }}
-        path: ${{ steps.build.outputs.zadark_appimage_file }}
+        path: |
+          ${{ steps.build.outputs.zadark_appimage_file }}
+          dist/Zalo-ZaDark.AppImage.zsync
         retention-days: 30
         
     - name: Create Release
@@ -107,7 +158,9 @@ jobs:
 
         files: |
           ${{ steps.build.outputs.original_appimage_file }}
+          dist/Zalo-Original.AppImage.zsync
           ${{ steps.build.outputs.zadark_appimage_file }}
+          dist/Zalo-ZaDark.AppImage.zsync
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -116,11 +169,12 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RELEASE_TAG: ${{ steps.build.outputs.zalo_version }}
-        CURRENT_COMMIT: ${{ env.COMMIT_HASH }}
+        ORIGINAL_APPIMAGE_NAME: ${{ steps.build.outputs.original_appimage_name }}
+        ZADARK_APPIMAGE_NAME: ${{ steps.build.outputs.zadark_appimage_name }}
       run: |
         set -euo pipefail
 
-        echo "Cleaning up assets for release $RELEASE_TAG (keeping commit $CURRENT_COMMIT)"
+        echo "Cleaning up superseded assets for release $RELEASE_TAG"
 
         asset_names=$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' || true)
 
@@ -130,7 +184,11 @@ jobs:
         fi
 
         for name in $asset_names; do
-          if [[ "$name" == Zalo-*.AppImage ]] && [[ "$name" != *"$CURRENT_COMMIT"* ]]; then
+          if [[ "$name" == Zalo-*.AppImage || "$name" == Zalo-*.AppImage.zsync ]] && \
+             [[ "$name" != "$ORIGINAL_APPIMAGE_NAME" ]] && \
+             [[ "$name" != "Zalo-Original.AppImage.zsync" ]] && \
+             [[ "$name" != "$ZADARK_APPIMAGE_NAME" ]] && \
+             [[ "$name" != "Zalo-ZaDark.AppImage.zsync" ]]; then
             echo "Removing old asset: $name"
             gh release delete-asset "$RELEASE_TAG" "$name" --yes
           fi
